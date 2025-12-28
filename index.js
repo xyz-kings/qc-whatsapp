@@ -1,37 +1,37 @@
 const express = require("express")
 const path = require("path")
-const fetch = require("node-fetch")
 const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas")
 
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// LOAD FONT
+// === LOAD FONT CUSTOM ===
 GlobalFonts.registerFromPath(
   path.join(__dirname, "xyzfont.ttf"),
   "XyzFont"
 )
 
-// ROOT INFO
+/* ROOT INFO */
 app.get("/", (req, res) => {
   res.json({
     status: true,
+    name: "QC WhatsApp API",
     endpoint: "/api/qc",
-    example:
-      "http://localhost:3000/api/qc?avatar=https://files.catbox.moe/wozyle.jpg&name=XyzKings&message=Haii+kucing+mewng"
+    example: `/api/qc?avatar=https://files.catbox.moe/wozyle.jpg&name=XyzKings&message=Haii+kucing+mewng`
   })
 })
 
-// FETCH AVATAR
-async function getImage(url) {
+/* FETCH IMAGE BUFFER */
+async function fetchImageBuffer(url) {
   const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" }
+    headers: { "User-Agent": "Mozilla/5.0" },
+    signal: AbortSignal.timeout(10000)
   })
-  if (!res.ok) throw new Error("Avatar gagal diambil")
+  if (!res.ok) throw new Error("gagal ambil avatar")
   return Buffer.from(await res.arrayBuffer())
 }
 
-// QC ENDPOINT
+/* QC ENDPOINT */
 app.get("/api/qc", async (req, res) => {
   try {
     const { avatar, name = "Unknown", message = "..." } = req.query
@@ -39,36 +39,40 @@ app.get("/api/qc", async (req, res) => {
       return res.status(400).json({ status: false, message: "avatar wajib" })
     }
 
+    // === CANVAS ===
     const canvasSize = 512
     const canvas = createCanvas(canvasSize, canvasSize)
     const ctx = canvas.getContext("2d")
+    ctx.clearRect(0, 0, canvasSize, canvasSize) // transparan
 
-    ctx.clearRect(0, 0, canvasSize, canvasSize)
+    // === AVATAR (LEBIH KECIL) ===
+    const avatarSize = 60
+    const avatarPadding = 18
 
-    // SIZE SETTING
-    const avatarSize = 56
-    const padding = 16
+    // === BUBBLE ===
     const bubbleWidth = canvasSize - avatarSize - 90
 
-    // TEXT SIZE
-    const nameSize = 20
-    const msgSize = 18
-    const lineHeight = 24
+    // === FONT SIZE (11/12) ===
+    const nameSize = 22
+    const msgSize = 20
+    const lineHeight = 26
 
     ctx.font = `${msgSize}px XyzFont`
-    const lines = wrapText(ctx, message, bubbleWidth - 40)
-    const bubbleHeight = 60 + lines.length * lineHeight
+    const textLines = wrapTextCalc(ctx, message, bubbleWidth - 40)
+    const bubbleHeight = 56 + textLines.length * lineHeight
 
-    const startY = (canvasSize - Math.max(avatarSize, bubbleHeight)) / 2
+    // === CENTERING ===
+    const totalHeight = Math.max(avatarSize, bubbleHeight)
+    const startY = (canvasSize - totalHeight) / 2
 
     const avatarX = 24
     const avatarY = startY
-    const bubbleX = avatarX + avatarSize + padding
+    const bubbleX = avatarX + avatarSize + avatarPadding
     const bubbleY = startY
 
-    // AVATAR
-    const avatarBuf = await getImage(avatar)
-    const img = await loadImage(avatarBuf)
+    // === AVATAR ===
+    const avatarBuffer = await fetchImageBuffer(avatar)
+    const img = await loadImage(avatarBuffer)
 
     ctx.save()
     ctx.beginPath()
@@ -83,59 +87,38 @@ app.get("/api/qc", async (req, res) => {
     ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize)
     ctx.restore()
 
-    // BUBBLE BACKGROUND
-    ctx.fillStyle = "#ffffff"
-    drawRoundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 22)
-    ctx.fill()
-
-    // BORDER
+    // === BORDER PUTIH ===
     ctx.strokeStyle = "#ffffff"
     ctx.lineWidth = 3
+    roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 22)
     ctx.stroke()
 
-    // NAME
-    ctx.fillStyle = "#d97706" // oranye redup
+    // === NAME (ORANYE REDUP, GEDE, BOLD) ===
+    ctx.fillStyle = "#d97706"
     ctx.font = `bold ${nameSize}px XyzFont`
-    ctx.fillText(name, bubbleX + 20, bubbleY + 28)
+    ctx.fillText(name, bubbleX + 20, bubbleY + 30)
 
-    // MESSAGE
+    // === MESSAGE (HITAM, HAMPIR SAMA BESAR) ===
     ctx.fillStyle = "#000000"
     ctx.font = `${msgSize}px XyzFont`
-    drawText(ctx, message, bubbleX + 20, bubbleY + 54, bubbleWidth - 40, lineHeight)
+    drawWrappedText(
+      ctx,
+      message,
+      bubbleX + 20,
+      bubbleY + 58,
+      bubbleWidth - 40,
+      lineHeight
+    )
 
     res.setHeader("Content-Type", "image/png")
     res.end(canvas.toBuffer("image/png"))
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ status: false, error: err.message })
+  } catch (e) {
+    res.status(500).json({ status: false, message: e.message })
   }
 })
 
-// TEXT WRAP
-function wrapText(ctx, text, maxWidth) {
-  const words = text.split(" ")
-  const lines = []
-  let line = ""
-
-  for (const w of words) {
-    const test = line + w + " "
-    if (ctx.measureText(test).width > maxWidth) {
-      lines.push(line)
-      line = w + " "
-    } else {
-      line = test
-    }
-  }
-  lines.push(line)
-  return lines
-}
-
-function drawText(ctx, text, x, y, maxWidth, lh) {
-  const lines = wrapText(ctx, text, maxWidth)
-  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lh))
-}
-
-function drawRoundRect(ctx, x, y, w, h, r) {
+/* UTIL */
+function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
   ctx.lineTo(x + w - r, y)
@@ -149,10 +132,35 @@ function drawRoundRect(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
-// LOCALHOST
+function wrapTextCalc(ctx, text, maxWidth) {
+  const words = text.split(" ")
+  const lines = []
+  let line = ""
+
+  for (const word of words) {
+    const test = line + word + " "
+    if (ctx.measureText(test).width > maxWidth) {
+      lines.push(line)
+      line = word + " "
+    } else {
+      line = test
+    }
+  }
+  lines.push(line)
+  return lines
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+  const lines = wrapTextCalc(ctx, text, maxWidth)
+  lines.forEach((line, i) => {
+    ctx.fillText(line, x, y + i * lineHeight)
+  })
+}
+
+/* LOCAL */
 if (!process.env.VERCEL) {
   app.listen(PORT, () =>
-    console.log(`QC API jalan → http://localhost:${PORT}`)
+    console.log(`QC API running → http://localhost:${PORT}`)
   )
 }
 
