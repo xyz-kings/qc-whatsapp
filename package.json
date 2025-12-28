@@ -6,8 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "canvas": "^2.11.2",
-    "express": "^4.19.2",
-    "node-fetch": "^3.3.2"
+    "@napi-rs/canvas": "^0.1.68",
+    "express": "^4.19.2"
   }
 }
