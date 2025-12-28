@@ -1,61 +1,42 @@
 const express = require("express")
-const { createCanvas, loadImage } = require("canvas")
+const { createCanvas, loadImage } = require("@napi-rs/canvas")
 
 const app = express()
 
 app.get("/api/qc", async (req, res) => {
-  try {
-    const avatar = req.query.avatar
-    const name = req.query.name || "Unknown"
-    const message = req.query.message || "..."
+  const { avatar, name = "Unknown", message = "..." } = req.query
+  if (!avatar) return res.status(400).send("avatar wajib")
 
-    if (!avatar) {
-      return res.status(400).json({ error: "avatar wajib" })
-    }
+  const size = 512
+  const canvas = createCanvas(size, size)
+  const ctx = canvas.getContext("2d")
 
-    const size = 512
-    const canvas = createCanvas(size, size)
-    const ctx = canvas.getContext("2d")
+  ctx.clearRect(0, 0, size, size)
 
-    ctx.clearRect(0, 0, size, size)
+  // avatar
+  const img = await loadImage(avatar)
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(80, 80, 48, 0, Math.PI * 2)
+  ctx.clip()
+  ctx.drawImage(img, 32, 32, 96, 96)
+  ctx.restore()
 
-    // Avatar kiri
-    const avatarImg = await loadImage(avatar)
-    const avatarSize = 96
+  // bubble
+  ctx.fillStyle = "#1f2937"
+  roundRect(ctx, 160, 32, 320, 220, 24)
+  ctx.fill()
 
-    ctx.save()
-    ctx.beginPath()
-    ctx.arc(80, 80, avatarSize / 2, 0, Math.PI * 2)
-    ctx.clip()
-    ctx.drawImage(avatarImg, 32, 32, avatarSize, avatarSize)
-    ctx.restore()
+  ctx.fillStyle = "#22c55e"
+  ctx.font = "bold 22px Sans"
+  ctx.fillText(name, 180, 60)
 
-    // Bubble kanan
-    const bubbleX = 160
-    const bubbleY = 32
-    const bubbleW = 320
-    const bubbleH = 220
-    const r = 24
+  ctx.fillStyle = "#fff"
+  ctx.font = "18px Sans"
+  wrapText(ctx, message, 180, 90, 280, 26)
 
-    ctx.fillStyle = "#1f2937"
-    roundRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, r)
-    ctx.fill()
-
-    // Nama
-    ctx.fillStyle = "#22c55e"
-    ctx.font = "bold 22px Sans"
-    ctx.fillText(name, bubbleX + 20, bubbleY + 36)
-
-    // Text
-    ctx.fillStyle = "#ffffff"
-    ctx.font = "18px Sans"
-    wrapText(ctx, message, bubbleX + 20, bubbleY + 70, bubbleW - 40, 26)
-
-    res.setHeader("Content-Type", "image/jpeg")
-    res.send(canvas.toBuffer("image/jpeg", { quality: 0.95 }))
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
+  res.setHeader("Content-Type", "image/jpeg")
+  res.end(canvas.toBuffer("image/jpeg"))
 })
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -72,19 +53,15 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = text.split(" ")
+function wrapText(ctx, text, x, y, max, lh) {
   let line = ""
-
-  for (let i = 0; i < words.length; i++) {
-    const test = line + words[i] + " "
-    if (ctx.measureText(test).width > maxWidth && i > 0) {
+  for (const word of text.split(" ")) {
+    const test = line + word + " "
+    if (ctx.measureText(test).width > max) {
       ctx.fillText(line, x, y)
-      line = words[i] + " "
-      y += lineHeight
-    } else {
-      line = test
-    }
+      line = word + " "
+      y += lh
+    } else line = test
   }
   ctx.fillText(line, x, y)
 }
