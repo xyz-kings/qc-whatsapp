@@ -3,45 +3,32 @@ const { createCanvas, loadImage } = require("@napi-rs/canvas")
 
 const app = express()
 
-/* =========================
-   ROOT INFO (JSON)
-========================= */
+const PORT = process.env.PORT || 3000
+
+/* ROOT INFO */
 app.get("/", (req, res) => {
   res.json({
     status: true,
-    name: "QC WhatsApp API",
-    description: "API untuk membuat QC (Quote Chat) sticker WhatsApp",
+    name: "QC WhatsApp API (Local Test)",
     endpoint: "/api/qc",
-    method: "GET",
-    response: "image/jpeg",
-    params: {
-      avatar: "URL foto profil (wajib)",
-      name: "Nama WhatsApp",
-      message: "Isi pesan"
-    },
-    example: "https://qc-whatsapp.vercel.app/api/qc?avatar=https://files.catbox.moe/wozyle.jpg&name=XyzKings&message=Haii+kucing+mewng"
+    example: `http://localhost:${PORT}/api/qc?avatar=https://files.catbox.moe/wozyle.jpg&name=XyzKings&message=Haii+kucing+mewng`
   })
 })
 
-/* =========================
-   HELPER FETCH IMAGE
-========================= */
+/* HELPER FETCH IMAGE */
 async function fetchImageBuffer(url) {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0" },
-    signal: AbortSignal.timeout(8000)
+    signal: AbortSignal.timeout(10000)
   })
   if (!res.ok) throw new Error("gagal ambil avatar")
   return Buffer.from(await res.arrayBuffer())
 }
 
-/* =========================
-   QC ENDPOINT
-========================= */
+/* QC ENDPOINT */
 app.get("/api/qc", async (req, res) => {
   try {
     const { avatar, name = "Unknown", message = "..." } = req.query
-
     if (!avatar) {
       return res.status(400).json({
         status: false,
@@ -52,10 +39,9 @@ app.get("/api/qc", async (req, res) => {
     const size = 512
     const canvas = createCanvas(size, size)
     const ctx = canvas.getContext("2d")
-
     ctx.clearRect(0, 0, size, size)
 
-    // === AVATAR ===
+    // avatar
     const avatarBuffer = await fetchImageBuffer(avatar)
     const img = await loadImage(avatarBuffer)
 
@@ -66,17 +52,15 @@ app.get("/api/qc", async (req, res) => {
     ctx.drawImage(img, 32, 32, 96, 96)
     ctx.restore()
 
-    // === BUBBLE ===
+    // bubble
     ctx.fillStyle = "#1f2937"
     roundRect(ctx, 160, 32, 320, 220, 24)
     ctx.fill()
 
-    // === NAME ===
     ctx.fillStyle = "#22c55e"
     ctx.font = "bold 22px Sans"
     ctx.fillText(name, 180, 60)
 
-    // === MESSAGE ===
     ctx.fillStyle = "#ffffff"
     ctx.font = "18px Sans"
     wrapText(ctx, message, 180, 90, 280, 26)
@@ -91,9 +75,6 @@ app.get("/api/qc", async (req, res) => {
   }
 })
 
-/* =========================
-   UTIL FUNCTIONS
-========================= */
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
@@ -123,6 +104,15 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     }
   }
   ctx.fillText(line, x, y)
+}
+
+/* =========================
+   LISTEN LOCAL ONLY
+========================= */
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`QC API running at http://localhost:${PORT}`)
+  })
 }
 
 module.exports = app
