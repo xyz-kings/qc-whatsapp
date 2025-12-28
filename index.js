@@ -1,55 +1,44 @@
-import express from "express"
-import { createCanvas, loadImage } from "canvas"
-import fetch from "node-fetch"
+const express = require("express")
+const { createCanvas, loadImage } = require("canvas")
 
 const app = express()
 
 app.get("/api/qc", async (req, res) => {
   try {
-    const avatarURL = req.query.avatar
+    const avatar = req.query.avatar
     const name = req.query.name || "Unknown"
     const message = req.query.message || "..."
 
-    if (!avatarURL) {
+    if (!avatar) {
       return res.status(400).json({ error: "avatar wajib" })
     }
 
-    // Canvas persegi
     const size = 512
     const canvas = createCanvas(size, size)
     const ctx = canvas.getContext("2d")
 
-    // Background transparan (biar enak jadi stiker)
     ctx.clearRect(0, 0, size, size)
 
-    // Avatar (kiri kecil, rasio kira-kira 3:1 feel)
-    const avatarImg = await loadImage(avatarURL)
+    // Avatar kiri
+    const avatarImg = await loadImage(avatar)
     const avatarSize = 96
-    const avatarX = 32
-    const avatarY = 32
 
     ctx.save()
     ctx.beginPath()
-    ctx.arc(
-      avatarX + avatarSize / 2,
-      avatarY + avatarSize / 2,
-      avatarSize / 2,
-      0,
-      Math.PI * 2
-    )
+    ctx.arc(80, 80, avatarSize / 2, 0, Math.PI * 2)
     ctx.clip()
-    ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize)
+    ctx.drawImage(avatarImg, 32, 32, avatarSize, avatarSize)
     ctx.restore()
 
-    // Bubble (kanan)
+    // Bubble kanan
     const bubbleX = 160
     const bubbleY = 32
     const bubbleW = 320
-    const bubbleH = 200
-    const radius = 24
+    const bubbleH = 220
+    const r = 24
 
     ctx.fillStyle = "#1f2937"
-    roundRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, radius)
+    roundRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, r)
     ctx.fill()
 
     // Nama
@@ -57,17 +46,10 @@ app.get("/api/qc", async (req, res) => {
     ctx.font = "bold 22px Sans"
     ctx.fillText(name, bubbleX + 20, bubbleY + 36)
 
-    // Message
+    // Text
     ctx.fillStyle = "#ffffff"
     ctx.font = "18px Sans"
-    wrapText(
-      ctx,
-      message,
-      bubbleX + 20,
-      bubbleY + 70,
-      bubbleW - 40,
-      26
-    )
+    wrapText(ctx, message, bubbleX + 20, bubbleY + 70, bubbleW - 40, 26)
 
     res.setHeader("Content-Type", "image/jpeg")
     res.send(canvas.toBuffer("image/jpeg", { quality: 0.95 }))
@@ -95,17 +77,16 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   let line = ""
 
   for (let i = 0; i < words.length; i++) {
-    const testLine = line + words[i] + " "
-    const metrics = ctx.measureText(testLine)
-    if (metrics.width > maxWidth && i > 0) {
+    const test = line + words[i] + " "
+    if (ctx.measureText(test).width > maxWidth && i > 0) {
       ctx.fillText(line, x, y)
       line = words[i] + " "
       y += lineHeight
     } else {
-      line = testLine
+      line = test
     }
   }
   ctx.fillText(line, x, y)
 }
 
-export default app
+module.exports = app
