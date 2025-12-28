@@ -17,7 +17,8 @@ app.get("/", (req, res) => {
     status: true,
     name: "QC WhatsApp API",
     endpoint: "/api/qc",
-    example: `/api/qc?avatar=https://files.catbox.moe/wozyle.jpg&name=XyzKings&message=Haii+kucing+mewng`
+    example:
+      "/api/qc?avatar=https://files.catbox.moe/wozyle.jpg&name=XyzKings&message=Haii+kucing+mewng"
   })
 })
 
@@ -45,23 +46,25 @@ app.get("/api/qc", async (req, res) => {
     const ctx = canvas.getContext("2d")
     ctx.clearRect(0, 0, canvasSize, canvasSize) // transparan
 
-    // === AVATAR (LEBIH KECIL) ===
-    const avatarSize = 60
-    const avatarPadding = 18
+    // === AVATAR (LEBIH KECIL DIKIT) ===
+    const avatarSize = 58
+    const avatarPadding = 20
 
-    // === BUBBLE ===
-    const bubbleWidth = canvasSize - avatarSize - 90
+    // === BUBBLE (LEBIH GEDE & LEGAA) ===
+    const bubbleWidth = canvasSize - avatarSize - 70
 
-    // === FONT SIZE (11/12) ===
-    const nameSize = 22
-    const msgSize = 20
-    const lineHeight = 26
+    // === FONT SIZE (GEDE SEMUA) ===
+    const nameSize = 26
+    const msgSize = 23
+    const lineHeight = 30
 
     ctx.font = `${msgSize}px XyzFont`
-    const textLines = wrapTextCalc(ctx, message, bubbleWidth - 40)
-    const bubbleHeight = 56 + textLines.length * lineHeight
+    const textLines = wrapTextCalc(ctx, message, bubbleWidth - 48)
 
-    // === CENTERING ===
+    const bubbleHeight =
+      70 + textLines.length * lineHeight
+
+    // === POSISI TENGAH ===
     const totalHeight = Math.max(avatarSize, bubbleHeight)
     const startY = (canvasSize - totalHeight) / 2
 
@@ -87,16 +90,16 @@ app.get("/api/qc", async (req, res) => {
     ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize)
     ctx.restore()
 
-    // === BORDER PUTIH ===
+    // === BORDER PUTIH GEDE ===
     ctx.strokeStyle = "#ffffff"
-    ctx.lineWidth = 3
-    roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 22)
+    ctx.lineWidth = 4
+    roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 24)
     ctx.stroke()
 
     // === NAME (ORANYE REDUP, GEDE, BOLD) ===
     ctx.fillStyle = "#d97706"
     ctx.font = `bold ${nameSize}px XyzFont`
-    ctx.fillText(name, bubbleX + 20, bubbleY + 30)
+    ctx.fillText(name, bubbleX + 24, bubbleY + 34)
 
     // === MESSAGE (HITAM, HAMPIR SAMA BESAR) ===
     ctx.fillStyle = "#000000"
@@ -104,9 +107,9 @@ app.get("/api/qc", async (req, res) => {
     drawWrappedText(
       ctx,
       message,
-      bubbleX + 20,
-      bubbleY + 58,
-      bubbleWidth - 40,
+      bubbleX + 24,
+      bubbleY + 68,
+      bubbleWidth - 48,
       lineHeight
     )
 
