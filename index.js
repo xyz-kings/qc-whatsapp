@@ -5,13 +5,12 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas")
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// === LOAD FONT CUSTOM ===
+// FONT CUSTOM
 GlobalFonts.registerFromPath(
   path.join(__dirname, "xyzfont.ttf"),
   "XyzFont"
 )
 
-/* ROOT INFO */
 app.get("/", (req, res) => {
   res.json({
     status: true,
@@ -22,17 +21,15 @@ app.get("/", (req, res) => {
   })
 })
 
-/* FETCH IMAGE BUFFER */
 async function fetchImageBuffer(url) {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0" },
     signal: AbortSignal.timeout(10000)
   })
-  if (!res.ok) throw new Error("gagal ambil avatar")
+  if (!res.ok) throw new Error("avatar gagal dimuat")
   return Buffer.from(await res.arrayBuffer())
 }
 
-/* QC ENDPOINT */
 app.get("/api/qc", async (req, res) => {
   try {
     const { avatar, name = "Unknown", message = "..." } = req.query
@@ -40,35 +37,34 @@ app.get("/api/qc", async (req, res) => {
       return res.status(400).json({ status: false, message: "avatar wajib" })
     }
 
-    // === CANVAS ===
-    const canvasSize = 512
+    // === CANVAS GEDE ===
+    const canvasSize = 600
     const canvas = createCanvas(canvasSize, canvasSize)
     const ctx = canvas.getContext("2d")
-    ctx.clearRect(0, 0, canvasSize, canvasSize) // transparan
+    ctx.clearRect(0, 0, canvasSize, canvasSize)
 
-    // === AVATAR (LEBIH KECIL DIKIT) ===
-    const avatarSize = 58
-    const avatarPadding = 20
+    // === AVATAR ===
+    const avatarSize = 72
+    const avatarPadding = 24
 
-    // === BUBBLE (LEBIH GEDE & LEGAA) ===
-    const bubbleWidth = canvasSize - avatarSize - 70
+    // === BUBBLE ===
+    const bubbleWidth = canvasSize - avatarSize - 90
 
-    // === FONT SIZE (GEDE SEMUA) ===
-    const nameSize = 26
-    const msgSize = 23
-    const lineHeight = 30
+    // === FONT SUPER GEDE ===
+    const nameSize = 32
+    const msgSize = 28
+    const lineHeight = 36
 
     ctx.font = `${msgSize}px XyzFont`
-    const textLines = wrapTextCalc(ctx, message, bubbleWidth - 48)
+    const lines = wrapTextCalc(ctx, message, bubbleWidth - 56)
 
     const bubbleHeight =
-      70 + textLines.length * lineHeight
+      88 + lines.length * lineHeight
 
-    // === POSISI TENGAH ===
     const totalHeight = Math.max(avatarSize, bubbleHeight)
     const startY = (canvasSize - totalHeight) / 2
 
-    const avatarX = 24
+    const avatarX = 28
     const avatarY = startY
     const bubbleX = avatarX + avatarSize + avatarPadding
     const bubbleY = startY
@@ -90,26 +86,26 @@ app.get("/api/qc", async (req, res) => {
     ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize)
     ctx.restore()
 
-    // === BORDER PUTIH GEDE ===
+    // === BORDER PUTIH SUPER TEBAL ===
     ctx.strokeStyle = "#ffffff"
-    ctx.lineWidth = 4
-    roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 24)
+    ctx.lineWidth = 6
+    roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 28)
     ctx.stroke()
 
-    // === NAME (ORANYE REDUP, GEDE, BOLD) ===
+    // === NAMA (ORANYE REDUP, GEDE BANGET) ===
     ctx.fillStyle = "#d97706"
     ctx.font = `bold ${nameSize}px XyzFont`
-    ctx.fillText(name, bubbleX + 24, bubbleY + 34)
+    ctx.fillText(name, bubbleX + 28, bubbleY + 42)
 
-    // === MESSAGE (HITAM, HAMPIR SAMA BESAR) ===
+    // === MESSAGE (HITAM, HAMPIR SAMA GEDE) ===
     ctx.fillStyle = "#000000"
     ctx.font = `${msgSize}px XyzFont`
     drawWrappedText(
       ctx,
       message,
-      bubbleX + 24,
-      bubbleY + 68,
-      bubbleWidth - 48,
+      bubbleX + 28,
+      bubbleY + 84,
+      bubbleWidth - 56,
       lineHeight
     )
 
@@ -120,7 +116,6 @@ app.get("/api/qc", async (req, res) => {
   }
 })
 
-/* UTIL */
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
@@ -160,10 +155,9 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
   })
 }
 
-/* LOCAL */
 if (!process.env.VERCEL) {
   app.listen(PORT, () =>
-    console.log(`QC API running → http://localhost:${PORT}`)
+    console.log(`QC API jalan → http://localhost:${PORT}`)
   )
 }
 
