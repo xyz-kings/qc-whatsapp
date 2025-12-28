@@ -1,38 +1,3 @@
-const express = require("express")
-const path = require("path")
-const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas")
-
-const app = express()
-const PORT = process.env.PORT || 3000
-
-// === LOAD FONT CUSTOM ===
-GlobalFonts.registerFromPath(
-  path.join(__dirname, "xyzfont.ttf"),
-  "XyzFont"
-)
-
-/* ROOT INFO */
-app.get("/", (req, res) => {
-  res.json({
-    status: true,
-    name: "QC WhatsApp API",
-    endpoint: "/api/qc",
-    note: "Background transparan, font custom, border auto-size",
-    example: `http://localhost:${PORT}/api/qc?avatar=https://files.catbox.moe/wozyle.jpg&name=XyzKings&message=Haii+kucing+mewng`
-  })
-})
-
-/* FETCH IMAGE BUFFER */
-async function fetchImageBuffer(url) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    signal: AbortSignal.timeout(10000)
-  })
-  if (!res.ok) throw new Error("gagal ambil avatar")
-  return Buffer.from(await res.arrayBuffer())
-}
-
-/* QC ENDPOINT */
 app.get("/api/qc", async (req, res) => {
   try {
     const { avatar, name = "Unknown", message = "..." } = req.query
@@ -40,34 +5,36 @@ app.get("/api/qc", async (req, res) => {
       return res.status(400).json({ status: false, message: "avatar wajib" })
     }
 
-    // === CANVAS ===
     const canvasSize = 512
     const canvas = createCanvas(canvasSize, canvasSize)
     const ctx = canvas.getContext("2d")
 
-    ctx.clearRect(0, 0, canvasSize, canvasSize) // TRANSPARAN
+    ctx.clearRect(0, 0, canvasSize, canvasSize)
 
-    // === FONT SETTING ===
-    ctx.font = "16px XyzFont"
+    // === FONT SIZE ===
+    const nameFontSize = 20
+    const messageFontSize = 18
 
-    // === AVATAR SIZE (LEBIH KECIL) ===
-    const avatarSize = 72
-    const avatarPadding = 20
+    // === AVATAR (DIPERKECIL) ===
+    const avatarSize = 60
+    const avatarPadding = 16
 
     // === BUBBLE WIDTH ===
-    const bubbleWidth = canvasSize - avatarSize - 80
+    const bubbleWidth = canvasSize - avatarSize - 90
 
-    // === HITUNG TINGGI TEXT ===
-    const textLines = wrapTextCalc(ctx, message, bubbleWidth - 40)
-    const lineHeight = 22
+    // === HITUNG TEXT ===
+    ctx.font = `${messageFontSize}px XyzFont`
+    const lines = wrapTextCalc(ctx, message, bubbleWidth - 40)
+    const lineHeight = 24
+
     const bubbleHeight =
-      50 + textLines.length * lineHeight
+      60 + lines.length * lineHeight
 
     // === POSISI TENGAH ===
     const totalHeight = Math.max(avatarSize, bubbleHeight)
     const startY = (canvasSize - totalHeight) / 2
 
-    const avatarX = 20
+    const avatarX = 24
     const avatarY = startY
 
     const bubbleX = avatarX + avatarSize + avatarPadding
@@ -90,24 +57,29 @@ app.get("/api/qc", async (req, res) => {
     ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize)
     ctx.restore()
 
+    // === BUBBLE BACKGROUND PUTIH ===
+    ctx.fillStyle = "#ffffff"
+    roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 22)
+    ctx.fill()
+
     // === BORDER PUTIH ===
     ctx.strokeStyle = "#ffffff"
     ctx.lineWidth = 3
-    roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 20)
     ctx.stroke()
 
-    // === NAME ===
-    ctx.fillStyle = "#ffffff"
-    ctx.font = "bold 18px XyzFont"
+    // === NAMA (ORANYE REDUP, BOLD) ===
+    ctx.fillStyle = "#d97706" // oranye redup
+    ctx.font = `bold ${nameFontSize}px XyzFont`
     ctx.fillText(name, bubbleX + 20, bubbleY + 28)
 
-    // === MESSAGE ===
-    ctx.font = "16px XyzFont"
+    // === MESSAGE (HITAM, 11/12 SIZE) ===
+    ctx.fillStyle = "#000000"
+    ctx.font = `${messageFontSize}px XyzFont`
     drawWrappedText(
       ctx,
       message,
       bubbleX + 20,
-      bubbleY + 55,
+      bubbleY + 54,
       bubbleWidth - 40,
       lineHeight
     )
@@ -118,52 +90,3 @@ app.get("/api/qc", async (req, res) => {
     res.status(500).json({ status: false, message: e.message })
   }
 })
-
-/* UTIL */
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + w - r, y)
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-  ctx.lineTo(x + w, y + h - r)
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  ctx.lineTo(x + r, y + h)
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-  ctx.closePath()
-}
-
-function wrapTextCalc(ctx, text, maxWidth) {
-  const words = text.split(" ")
-  const lines = []
-  let line = ""
-
-  for (const word of words) {
-    const test = line + word + " "
-    if (ctx.measureText(test).width > maxWidth) {
-      lines.push(line)
-      line = word + " "
-    } else {
-      line = test
-    }
-  }
-  lines.push(line)
-  return lines
-}
-
-function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
-  const lines = wrapTextCalc(ctx, text, maxWidth)
-  lines.forEach((line, i) => {
-    ctx.fillText(line, x, y + i * lineHeight)
-  })
-}
-
-/* LOCAL LISTEN */
-if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`QC API running → http://localhost:${PORT}`)
-  })
-}
-
-module.exports = app
