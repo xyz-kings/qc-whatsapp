@@ -13,7 +13,6 @@ GlobalFonts.registerFromPath(
 app.get("/", (req, res) => {
   res.json({
     status: true,
-    name: "QC WhatsApp API",
     endpoints: {
       v1: "/api/qc/v1",
       v2: "/api/qc/v2"
@@ -37,33 +36,47 @@ function qcHandler(version) {
       if (!avatar)
         return res.status(400).json({ status: false, message: "avatar wajib" })
 
-      const canvasSize = 600
+      /* ===== CANVAS ===== */
+      const canvasSize = 820
       const canvas = createCanvas(canvasSize, canvasSize)
       const ctx = canvas.getContext("2d")
       ctx.clearRect(0, 0, canvasSize, canvasSize)
 
-      // === SIZE SETTING ===
-      const avatarSize = 64 // diperkecil
-      const padding = 26
-      const bubbleWidth = canvasSize - avatarSize - 90
+      /* ===== CONFIG ===== */
+      const avatarSize = 104
+      const gap = 36
+      const bubbleWidth = canvasSize - avatarSize - 180
 
-      const nameSize = 36
-      const msgSize = 32
-      const lineHeight = 40
+      const nameSize = 64
+      const msgSize = 60
+      const lineHeight = 70
 
+      const PADDING = 24
+      const SECTION_GAP = 28      // ✅ jarak dipendekin
+      const CONTENT_OFFSET_Y = 36
+      const TEXT_SHIFT_X = 18     // ✅ geser kanan
+      const MESSAGE_PUSH = 10
+
+      /* ===== TEXT MEASURE ===== */
       ctx.font = `${msgSize}px XyzFont`
-      const lines = wrapTextCalc(ctx, message, bubbleWidth - 56)
-      const bubbleHeight = 92 + lines.length * lineHeight
+      const msgLines = wrapTextCalc(ctx, message, bubbleWidth - 48)
 
+      const nameAreaHeight = nameSize + 26
+      const msgAreaHeight = msgLines.length * lineHeight + 20
+
+      const bubbleHeight =
+        nameAreaHeight + SECTION_GAP + msgAreaHeight
+
+      /* ===== POSITION ===== */
       const startY =
         (canvasSize - Math.max(avatarSize, bubbleHeight)) / 2
 
-      const avatarX = 28
+      const avatarX = 44
       const avatarY = startY
-      const bubbleX = avatarX + avatarSize + padding
+      const bubbleX = avatarX + avatarSize + gap
       const bubbleY = startY
 
-      // === AVATAR ===
+      /* ===== AVATAR ===== */
       const img = await loadImage(await fetchImageBuffer(avatar))
       ctx.save()
       ctx.beginPath()
@@ -78,25 +91,33 @@ function qcHandler(version) {
       ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize)
       ctx.restore()
 
-      // === BUBBLE ===
+      /* ===== BUBBLE ===== */
       ctx.fillStyle = version === "v1" ? "#ffffff" : "#000000"
-      roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 28)
+      roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 40)
       ctx.fill()
 
-      // === NAME ===
+      /* ===== NAME ===== */
       ctx.fillStyle = "#d97706"
       ctx.font = `bold ${nameSize}px XyzFont`
-      ctx.fillText(name, bubbleX + 28, bubbleY + 46)
+      ctx.fillText(
+        name,
+        bubbleX + PADDING + TEXT_SHIFT_X,
+        bubbleY + nameSize + CONTENT_OFFSET_Y
+      )
 
-      // === MESSAGE ===
+      /* ===== MESSAGE ===== */
       ctx.fillStyle = version === "v1" ? "#000000" : "#ffffff"
       ctx.font = `${msgSize}px XyzFont`
       drawWrappedText(
         ctx,
         message,
-        bubbleX + 28,
-        bubbleY + 92,
-        bubbleWidth - 56,
+        bubbleX + PADDING + TEXT_SHIFT_X,
+        bubbleY +
+          nameAreaHeight +
+          SECTION_GAP +
+          CONTENT_OFFSET_Y +
+          MESSAGE_PUSH,
+        bubbleWidth - 48,
         lineHeight
       )
 
@@ -108,11 +129,10 @@ function qcHandler(version) {
   }
 }
 
-// === ROUTES ===
 app.get("/api/qc/v1", qcHandler("v1"))
 app.get("/api/qc/v2", qcHandler("v2"))
 
-// === UTIL ===
+/* ===== UTIL ===== */
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
@@ -153,7 +173,7 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
 
 if (!process.env.VERCEL) {
   app.listen(PORT, () =>
-    console.log(`QC API → http://localhost:${PORT}`)
+    console.log(`QC API jalan → http://localhost:${PORT}`)
   )
 }
 
