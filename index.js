@@ -47,8 +47,8 @@ function qcHandler(version) {
       const gap = 36
       const bubbleWidth = canvasSize - avatarSize - 180
 
-      const nameSize = 64
-      const msgSize = 60
+      const nameSize = 58
+      const msgSize = 54
       const lineHeight = 70
 
       const PADDING = 24
