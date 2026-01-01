@@ -4,17 +4,21 @@ const fetch = require("node-fetch")
 const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas")
 
 const app = express()
+const router = express.Router()
 const PORT = process.env.PORT || 3000
 
 // === REGISTER FONT ===
 GlobalFonts.registerFromPath(path.join(__dirname, "xyzfont.ttf"), "XyzFont")
 GlobalFonts.registerFromPath(path.join(__dirname, "emoji.ttf"), "EmojiFont")
 
-// === ROOT ===
-app.get("/", (req, res) => {
+// ================= ROOT API =================
+router.get("/", (req, res) => {
   res.json({
     status: true,
-    endpoints: { v1: "/api/qc/v1", v2: "/api/qc/v2" },
+    endpoints: {
+      v1: "/api/qc/v1",
+      v2: "/api/qc/v2"
+    },
     note: "Support emoji warna pakai Twemoji CDN"
   })
 })
@@ -104,7 +108,7 @@ async function drawTextWithEmoji(ctx, parts, x, y, fontSize) {
   }
 }
 
-// === JUSTIFY LINE (KHUSUS MESSAGE) ===
+// === JUSTIFY LINE ===
 async function drawJustifiedLine(ctx, text, x, y, maxWidth, fontSize) {
   const words = text.split(" ")
   if (words.length < 2) {
@@ -117,8 +121,7 @@ async function drawJustifiedLine(ctx, text, x, y, maxWidth, fontSize) {
     0
   )
 
-  const spaceCount = words.length - 1
-  const spaceWidth = (maxWidth - wordsWidth) / spaceCount
+  const spaceWidth = (maxWidth - wordsWidth) / (words.length - 1)
 
   let offsetX = 0
   for (let i = 0; i < words.length; i++) {
@@ -130,7 +133,7 @@ async function drawJustifiedLine(ctx, text, x, y, maxWidth, fontSize) {
       fontSize
     )
     offsetX += ctx.measureText(words[i]).width
-    if (i < spaceCount) offsetX += spaceWidth
+    if (i < words.length - 1) offsetX += spaceWidth
   }
 }
 
@@ -146,7 +149,6 @@ function qcHandler(version) {
       const canvas = createCanvas(canvasSize, canvasSize)
       const ctx = canvas.getContext("2d")
 
-      // === LAYOUT TUNING ===
       const avatarSize = 104
       const avatarX = 24
       const gap = 28
@@ -165,52 +167,43 @@ function qcHandler(version) {
       const NAME_MESSAGE_GAP = 12
       const SIDE_PADDING = 24
 
-      // === TEXT PREP ===
       ctx.font = `${msgSize}px "XyzFont"`
       const rawLines = message.split("\n")
       const msgLines = rawLines.flatMap(l =>
         wrapText(ctx, l, bubbleWidth - SIDE_PADDING * 2)
       )
 
-      const nameBlockHeight = nameSize
-      const messageBlockHeight = msgLines.length * lineHeight
-
       const bubbleHeight =
         PADDING_TOP +
-        nameBlockHeight +
+        nameSize +
         NAME_MESSAGE_GAP +
-        messageBlockHeight +
+        msgLines.length * lineHeight +
         PADDING_BOTTOM
 
       const startY = (canvasSize - Math.max(avatarSize, bubbleHeight)) / 2
-      const avatarY = startY
       const bubbleX = avatarX + avatarSize + gap
-      const bubbleY = startY
 
-      // === AVATAR ===
       const avatarImg = await loadImage(await fetchImageBuffer(avatar))
       ctx.save()
       ctx.beginPath()
       ctx.arc(
         avatarX + avatarSize / 2,
-        avatarY + avatarSize / 2,
+        startY + avatarSize / 2,
         avatarSize / 2,
         0,
         Math.PI * 2
       )
       ctx.clip()
-      ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize)
+      ctx.drawImage(avatarImg, avatarX, startY, avatarSize, avatarSize)
       ctx.restore()
 
-      // === BUBBLE ===
       ctx.fillStyle = version === "v1" ? "#ffffff" : "#000000"
-      roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 40)
+      roundRect(ctx, bubbleX, startY, bubbleWidth, bubbleHeight, 40)
       ctx.fill()
 
-      // === NAME ===
       ctx.fillStyle = "#d97706"
       ctx.font = `bold ${nameSize}px "XyzFont"`
-      const nameY = bubbleY + NAME_TOP_OFFSET + nameSize
+      const nameY = startY + NAME_TOP_OFFSET + nameSize
       await drawTextWithEmoji(
         ctx,
         parseTextEmoji(name),
@@ -219,7 +212,6 @@ function qcHandler(version) {
         nameSize
       )
 
-      // === MESSAGE (JUSTIFY) ===
       ctx.fillStyle = version === "v1" ? "#000000" : "#ffffff"
       ctx.font = `${msgSize}px "XyzFont"`
       let msgY = nameY + NAME_MESSAGE_GAP + lineHeight
@@ -256,12 +248,15 @@ function qcHandler(version) {
   }
 }
 
-app.get("/api/qc/v1", qcHandler("v1"))
-app.get("/api/qc/v2", qcHandler("v2"))
+// === ROUTES ===
+router.get("/qc/v1", qcHandler("v1"))
+router.get("/qc/v2", qcHandler("v2"))
+app.use("/api", router)
 
-if (!process.env.VERCEL) {
+// === LOCAL ONLY ===
+if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () =>
-    console.log(`QC API jalan → http://localhost:${PORT}`)
+    console.log(`QC API lokal → http://localhost:${PORT}`)
   )
 }
 
