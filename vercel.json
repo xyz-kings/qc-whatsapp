@@ -1,5 +1,12 @@
 {
   "version": 2,
+  "functions": {
+    "index.js": {
+      "runtime": "nodejs18.x",
+      "memory": 1024,
+      "maxDuration": 15
+    }
+  },
   "builds": [
     {
       "src": "index.js",
@@ -11,11 +18,5 @@
       "src": "/(.*)",
       "dest": "/index.js"
     }
-  ],
-  "functions": {
-    "index.js": {
-      "memory": 1024,
-      "maxDuration": 15
-    }
-  }
+  ]
 }
