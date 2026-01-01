@@ -1,25 +1,16 @@
 const express = require("express")
-const fetch = require("node-fetch")
-const { createCanvas, loadImage, registerFont } = require("canvas")
+const path = require("path")
+const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas")
 
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// === FONT ===
-registerFont("./font.ttf", { family: "QCFont" })
-registerFont("./emoji.ttf", { family: "EmojiFont" })
+GlobalFonts.registerFromPath(
+  path.join(__dirname, "xyzfont.ttf"),
+  "XyzFont"
+)
 
-// === CONFIG ===
-const WIDTH = 900
-const AVATAR_SIZE = 90
-const SIDE_PADDING = 36
-const TOP_GAP = 40
-const BOTTOM_GAP = 40
-const LINE_HEIGHT = 34
-const RADIUS = 28
-
-// === ROOT ===
-app.get("/", (_, res) => {
+app.get("/", (req, res) => {
   res.json({
     status: true,
     endpoints: {
@@ -29,138 +20,161 @@ app.get("/", (_, res) => {
   })
 })
 
-// === TEXT WRAP ===
-function wrapText(ctx, text, maxWidth) {
-  const words = text.split(" ")
-  const lines = []
-  let line = ""
-
-  for (const w of words) {
-    const test = line + w + " "
-    if (ctx.measureText(test).width > maxWidth) {
-      lines.push(line.trim())
-      line = w + " "
-    } else {
-      line = test
-    }
-  }
-  if (line) lines.push(line.trim())
-  return lines
-}
-
-// === JUSTIFY ===
-function drawJustify(ctx, text, x, y, maxWidth) {
-  const words = text.split(" ")
-  if (words.length < 2) return ctx.fillText(text, x, y)
-
-  const wordsWidth = words.reduce(
-    (a, w) => a + ctx.measureText(w).width,
-    0
-  )
-
-  const space = (maxWidth - wordsWidth) / (words.length - 1)
-  let offset = 0
-
-  words.forEach((w, i) => {
-    ctx.fillText(w, x + offset, y)
-    offset += ctx.measureText(w).width + (i < words.length - 1 ? space : 0)
+async function fetchImageBuffer(url) {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+    signal: AbortSignal.timeout(10000)
   })
+  if (!res.ok) throw new Error("avatar gagal dimuat")
+  return Buffer.from(await res.arrayBuffer())
 }
 
-// === BUBBLE ===
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.arcTo(x + w, y, x + w, y + h, r)
-  ctx.arcTo(x + w, y + h, x, y + h, r)
-  ctx.arcTo(x, y + h, x, y, r)
-  ctx.arcTo(x, y, x + w, y, r)
-  ctx.closePath()
-}
-
-// === HANDLER ===
-function qcHandler(mode) {
+function qcHandler(version) {
   return async (req, res) => {
     try {
-      const { avatar, name, message } = req.query
-      if (!avatar) return res.json({ status: false, message: "avatar wajib" })
+      const { avatar, name = "Unknown", message = "..." } = req.query
+      if (!avatar)
+        return res.status(400).json({ status: false, message: "avatar wajib" })
 
-      const canvas = createCanvas(WIDTH, 10)
+      /* ===== CANVAS ===== */
+      const canvasSize = 820
+      const canvas = createCanvas(canvasSize, canvasSize)
       const ctx = canvas.getContext("2d")
+      ctx.clearRect(0, 0, canvasSize, canvasSize)
 
-      ctx.font = "26px QCFont"
-      const maxTextWidth = WIDTH - 220
-      const lines = wrapText(ctx, message || "Halo 😄🔥", maxTextWidth)
+      /* ===== CONFIG ===== */
+      const avatarSize = 104
+      const gap = 36
+      const bubbleWidth = canvasSize - avatarSize - 180
+
+      const nameSize = 58
+      const msgSize = 54
+      const lineHeight = 70
+
+      const PADDING = 24
+      const SECTION_GAP = 28      // ✅ jarak dipendekin
+      const CONTENT_OFFSET_Y = 36
+      const TEXT_SHIFT_X = 18     // ✅ geser kanan
+      const MESSAGE_PUSH = 10
+
+      /* ===== TEXT MEASURE ===== */
+      ctx.font = `${msgSize}px XyzFont`
+      const msgLines = wrapTextCalc(ctx, message, bubbleWidth - 48)
+
+      const nameAreaHeight = nameSize + 26
+      const msgAreaHeight = msgLines.length * lineHeight + 20
 
       const bubbleHeight =
-        TOP_GAP + 30 + lines.length * LINE_HEIGHT + BOTTOM_GAP
+        nameAreaHeight + SECTION_GAP + msgAreaHeight
 
-      canvas.height = Math.max(AVATAR_SIZE + 80, bubbleHeight + 80)
+      /* ===== POSITION ===== */
+      const startY =
+        (canvasSize - Math.max(avatarSize, bubbleHeight)) / 2
 
-      // background
-      ctx.fillStyle = mode === "v1" ? "#e5ddd5" : "#0b141a"
-      ctx.fillRect(0, 0, WIDTH, canvas.height)
+      const avatarX = 44
+      const avatarY = startY
+      const bubbleX = avatarX + avatarSize + gap
+      const bubbleY = startY
 
-      // avatar
-      const img = await loadImage(avatar)
+      /* ===== AVATAR ===== */
+      const img = await loadImage(await fetchImageBuffer(avatar))
       ctx.save()
       ctx.beginPath()
-      ctx.arc(55, 55, AVATAR_SIZE / 2, 0, Math.PI * 2)
+      ctx.arc(
+        avatarX + avatarSize / 2,
+        avatarY + avatarSize / 2,
+        avatarSize / 2,
+        0,
+        Math.PI * 2
+      )
       ctx.clip()
-      ctx.drawImage(img, 10, 10, AVATAR_SIZE, AVATAR_SIZE)
+      ctx.drawImage(img, avatarX, avatarY, avatarSize, avatarSize)
       ctx.restore()
 
-      // bubble
-      const bubbleX = 120
-      const bubbleY = 30
-      const bubbleW = WIDTH - bubbleX - 20
-
-      ctx.fillStyle = mode === "v1" ? "#ffffff" : "#1f2c34"
-      roundRect(ctx, bubbleX, bubbleY, bubbleW, bubbleHeight, RADIUS)
+      /* ===== BUBBLE ===== */
+      ctx.fillStyle = version === "v1" ? "#ffffff" : "#000000"
+      roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, 40)
       ctx.fill()
 
-      // name
-      ctx.font = "bold 24px QCFont"
-      ctx.fillStyle = "#00a884"
-      ctx.fillText(name || "Unknown 😎", bubbleX + SIDE_PADDING, bubbleY + 34)
+      /* ===== NAME ===== */
+      ctx.fillStyle = "#d97706"
+      ctx.font = `bold ${nameSize}px XyzFont`
+      ctx.fillText(
+        name,
+        bubbleX + PADDING + TEXT_SHIFT_X,
+        bubbleY + nameSize + CONTENT_OFFSET_Y
+      )
 
-      // message
-      ctx.font = "26px QCFont"
-      ctx.fillStyle = mode === "v1" ? "#000000" : "#e9edef"
-
-      let y = bubbleY + 68
-      for (let i = 0; i < lines.length; i++) {
-        if (i === lines.length - 1) {
-          ctx.fillText(lines[i], bubbleX + SIDE_PADDING, y)
-        } else {
-          drawJustify(
-            ctx,
-            lines[i],
-            bubbleX + SIDE_PADDING,
-            y,
-            bubbleW - SIDE_PADDING * 2
-          )
-        }
-        y += LINE_HEIGHT
-      }
+      /* ===== MESSAGE ===== */
+      ctx.fillStyle = version === "v1" ? "#000000" : "#ffffff"
+      ctx.font = `${msgSize}px XyzFont`
+      drawWrappedText(
+        ctx,
+        message,
+        bubbleX + PADDING + TEXT_SHIFT_X,
+        bubbleY +
+          nameAreaHeight +
+          SECTION_GAP +
+          CONTENT_OFFSET_Y +
+          MESSAGE_PUSH,
+        bubbleWidth - 48,
+        lineHeight
+      )
 
       res.setHeader("Content-Type", "image/png")
-      res.end(canvas.toBuffer())
+      res.end(canvas.toBuffer("image/png"))
     } catch (e) {
       res.status(500).json({ status: false, message: e.message })
     }
   }
 }
 
-// === ROUTES ===
 app.get("/api/qc/v1", qcHandler("v1"))
 app.get("/api/qc/v2", qcHandler("v2"))
 
+/* ===== UTIL ===== */
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y)
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+  ctx.lineTo(x + w, y + h - r)
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+  ctx.lineTo(x + r, y + h)
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+function wrapTextCalc(ctx, text, maxWidth) {
+  const words = text.split(" ")
+  const lines = []
+  let line = ""
+
+  for (const word of words) {
+    const test = line + word + " "
+    if (ctx.measureText(test).width > maxWidth) {
+      lines.push(line)
+      line = word + " "
+    } else {
+      line = test
+    }
+  }
+  lines.push(line)
+  return lines
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+  wrapTextCalc(ctx, text, maxWidth).forEach((l, i) => {
+    ctx.fillText(l, x, y + i * lineHeight)
+  })
+}
+
 if (!process.env.VERCEL) {
   app.listen(PORT, () =>
-    console.log("QC API jalan → http://localhost:" + PORT)
+    console.log(`QC API jalan → http://localhost:${PORT}`)
   )
 }
 
 module.exports = app
-module.exports.default = app
